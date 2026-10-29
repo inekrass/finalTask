@@ -97,6 +97,70 @@ app.get('/api/tasks/', async (req, res) => {
   }
 });
 
+function requireTaskId(req, res, next) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid task UUID' });
+  }
+  next();
+}
+
+app.get('/api/tasks/:id/', requireTaskId, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, owner_login, title, done, run_id, created_at
+       FROM tasks WHERE id = $1 AND owner_login = $2`,
+      [req.params.id, login],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Task not found' });
+    res.json(taskJson(result.rows[0]));
+  } catch {
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
+app.patch('/api/tasks/:id/', requireTaskId, express.json(), async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      !Object.keys(body).length || Object.keys(body).some((key) => key !== 'title' && key !== 'done')) {
+    return res.status(400).json({ error: 'Expected title and/or done only' });
+  }
+  const hasTitle = Object.hasOwn(body, 'title');
+  const hasDone = Object.hasOwn(body, 'done');
+  if (hasTitle && (typeof body.title !== 'string' ||
+      Array.from(body.title.trim()).length < 1 || Array.from(body.title.trim()).length > 200)) {
+    return res.status(400).json({ error: 'title must contain 1–200 characters after trim' });
+  }
+  if (hasDone && typeof body.done !== 'boolean') {
+    return res.status(400).json({ error: 'done must be boolean' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE tasks
+       SET title = COALESCE($3::varchar, title), done = COALESCE($4::boolean, done)
+       WHERE id = $1 AND owner_login = $2
+       RETURNING id, owner_login, title, done, run_id, created_at`,
+      [req.params.id, login, hasTitle ? body.title.trim() : null, hasDone ? body.done : null],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Task not found' });
+    res.json(taskJson(result.rows[0]));
+  } catch {
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
+app.delete('/api/tasks/:id/', requireTaskId, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM tasks WHERE id = $1 AND owner_login = $2',
+      [req.params.id, login],
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Task not found' });
+    res.status(204).end();
+  } catch {
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
 // Register future API routes above this final API fallback.
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
