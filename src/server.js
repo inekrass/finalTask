@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
@@ -17,6 +18,23 @@ if (!/^[A-Za-z0-9\-._~+/]+=*$/.test(apiToken)) {
 }
 
 const app = express();
+app.enable('strict routing');
+const pool = require('./db');
+
+function validRunId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function taskJson(row) {
+  return {
+    id: row.id,
+    ownerLogin: row.owner_login,
+    title: row.title,
+    done: row.done,
+    runId: row.run_id,
+    createdAt: row.created_at.toISOString(),
+  };
+}
 
 function requireAuthorization(req, res, next) {
   const match = /^Bearer ([A-Za-z0-9\-._~+/]+=*)$/i.exec(req.get('Authorization') || '');
@@ -36,9 +54,58 @@ app.get('/api/author/', (req, res) => {
   res.json({ login, fullName });
 });
 
+app.post('/api/tasks/', express.json(), async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 2 ||
+      !Object.hasOwn(body, 'title') || !Object.hasOwn(body, 'runId') ||
+      typeof body.title !== 'string' || !validRunId(body.runId)) {
+    return res.status(400).json({ error: 'Expected only title and valid runId' });
+  }
+  const title = body.title.trim();
+  if (Array.from(title).length < 1 || Array.from(title).length > 200) {
+    return res.status(400).json({ error: 'title must contain 1–200 characters after trim' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO tasks (id, owner_login, title, done, run_id)
+       VALUES ($1, $2, $3, FALSE, $4)
+       RETURNING id, owner_login, title, done, run_id, created_at`,
+      [randomUUID(), login, title, body.runId],
+    );
+    res.status(201).json(taskJson(result.rows[0]));
+  } catch {
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
+app.get('/api/tasks/', async (req, res) => {
+  if (!validRunId(req.query.runId)) {
+    return res.status(400).json({ error: 'Valid runId is required' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, owner_login, title, done, run_id, created_at
+       FROM tasks WHERE run_id = $1 AND owner_login = $2
+       ORDER BY created_at, id`,
+      [req.query.runId, login],
+    );
+    res.json(result.rows.map(taskJson));
+  } catch {
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
 // Register future API routes above this final API fallback.
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
+});
+
+app.use('/api', (error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const status = error.status >= 400 && error.status < 500 ? 400 : 500;
+  res.status(status).json({ error: status === 400 ? 'Invalid JSON request' : 'Internal server error' });
 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));

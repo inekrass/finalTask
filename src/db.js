@@ -7,10 +7,12 @@ if (!process.env.DATABASE_URL?.trim()) {
   throw new Error('DATABASE_URL не задан. Укажите строку подключения в .env.');
 }
 
-// TLS options (including Neon sslmode=require) come from the connection string.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   connectionTimeoutMillis: 10000,
+});
+pool.on('error', (error) => {
+  console.error('Ошибка соединения PostgreSQL:', error.code || 'UNKNOWN');
 });
 
 module.exports = pool;
