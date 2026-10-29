@@ -5,11 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Tasks</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
 </head>
 <body>
   <main>
     <h1>My Tasks</h1>
-    <p>Приложение инициализировано</p>
+    <section id="login-screen" aria-label="Вход">
+      <form id="login-form">
+        <label for="token">Bearer-токен</label>
+        <div class="row"><input id="token" type="password" required autocomplete="off" spellcheck="false"><button>Войти</button></div>
+      </form>
+    </section>
+    <section id="tasks-screen" hidden aria-label="Ваши задачи">
+      <header class="row"><p id="author"></p><button id="logout" type="button" class="secondary">Выйти</button></header>
+      <form id="group-form">
+        <label for="run-id">Группа (runId)</label>
+        <div class="row"><input id="run-id" value="manual" required maxlength="64" aria-describedby="group-hint"><button>Показать</button><button id="refresh" type="button" class="secondary">Обновить</button></div>
+        <p id="group-hint" class="hint">1–64 латинских буквы, цифры, знаки _ или -.</p>
+      </form>
+      <h2 id="group-heading">Задачи</h2>
+      <form id="add-form">
+        <label for="new-title">Название задачи</label>
+        <div class="row"><input id="new-title" required><button>Добавить</button></div>
+      </form>
+      <p id="empty" hidden>Задач пока нет</p>
+      <ul id="task-list" aria-label="Список задач"></ul>
+    </section>
+    <p id="message" role="status" aria-live="polite"></p>
   </main>
 </body>
 </html>
