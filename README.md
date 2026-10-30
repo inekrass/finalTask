@@ -1,8 +1,11 @@
 # My Tasks — итоговая работа по Express и PostgreSQL
 
 **Автор:** Некрасов Богдан Константинович · Moodle: `inekrass`
+
 **Приложение:** [https://my-tasks-inekrass.vercel.app/](https://my-tasks-inekrass.vercel.app/)
+
 **Исходный код:** [https://github.com/inekrass/finalTask](https://github.com/inekrass/finalTask)
+
 **Проверка условий размещения:** 30.10.2026
 
 ## Назначение и архитектура
